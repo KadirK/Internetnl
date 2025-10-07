@@ -1,12 +1,68 @@
 import pytest
-from py.xml import html
 import os
 import signal
 import subprocess
 import sys
 import time
+from html import escape as html_escape
 from internetnl import log
 from internetnl.celery import waitsome
+
+
+try:  # pragma: no cover - exercised implicitly by pytest-html hooks
+    from py.xml import html  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover - fallback for py>=1.12.0
+
+    class _HtmlString(str):
+        """String subclass that pytest-html recognises as markup."""
+
+        def __html__(self):  # pragma: no cover - behaviour verified via hooks
+            return str(self)
+
+    def _normalise_attr_name(name: str) -> str:
+        if name.endswith("_"):
+            name = name[:-1]
+        return name.replace("_", "-")
+
+    def _serialise_content(content):
+        if content is None:
+            return ""
+        if isinstance(content, (list, tuple, set)):
+            return "".join(_serialise_content(item) for item in content)
+        if isinstance(content, _HtmlString):
+            return str(content)
+        if hasattr(content, "__html__"):
+            return content.__html__()
+        if isinstance(content, str):
+            return html_escape(content)
+        return html_escape(str(content))
+
+    class _HtmlTag:
+        def __init__(self, tag: str, self_closing: bool = False):
+            self.tag = tag
+            self.self_closing = self_closing
+
+        def __call__(self, *children, **attrs):
+            attr_chunks = []
+            for key, value in attrs.items():
+                if value is None:
+                    continue
+                attr_chunks.append(f'{_normalise_attr_name(key)}="{html_escape(str(value))}"')
+            attr_str = " " + " ".join(attr_chunks) if attr_chunks else ""
+
+            if self.self_closing:
+                return _HtmlString(f"<{self.tag}{attr_str} />")
+
+            content = "".join(_serialise_content(child) for child in children)
+            return _HtmlString(f"<{self.tag}{attr_str}>{content}</{self.tag}>")
+
+    class _HtmlBuilder:
+        def __getattr__(self, name: str):
+            if name == "br":
+                return _HtmlTag("br", self_closing=True)
+            return _HtmlTag(name)
+
+    html = _HtmlBuilder()
 
 
 TEST_WORKER_TIMEOUT = 5
