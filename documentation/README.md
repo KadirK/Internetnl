@@ -17,6 +17,7 @@ based application, developed/tested/deployed through Docker containers.
 - [Live tests](Docker-live-tests.md)
 - [Metrics](Docker-metrics.md)
 - [Scoring](scoring.md)
+- [Using a Vercel domain](Vercel-domain.md)
 
 
 Note that the connection test requires more moving parts than the other
